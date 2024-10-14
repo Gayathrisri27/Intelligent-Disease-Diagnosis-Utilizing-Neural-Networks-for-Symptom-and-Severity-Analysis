@@ -1,0 +1,255 @@
+
+
+Disease Prediction and Severity Analysis System
+
+This project implements a machine learning system that predicts diseases based on user-reported symptoms and assesses the severity of those symptoms. The model leverages a feedforward neural network built using TensorFlow and Keras.
+
+
+
+
+
+Features
+
+Predicts disease based on a set of predefined symptoms.
+Assesses the severity of symptoms, categorizing them as mild, moderate, or severe.
+User-friendly interface for symptom input.
+Visualizes training history and feature importance.
+Technologies Used
+
+Python
+Pandas
+NumPy
+Scikit-learn
+TensorFlow/Keras
+Matplotlib
+Code Explanation
+
+Imports
+python
+Copy code
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import classification_report, accuracy_score
+import tensorflow as tf
+from tensorflow import keras
+import matplotlib.pyplot as plt
+Pandas and NumPy are used for data manipulation and numerical calculations.
+Scikit-learn provides tools for data preprocessing, model evaluation, and splitting datasets.
+TensorFlow/Keras is the primary library for building and training the neural network.
+Matplotlib is used for visualizing model performance and feature importance.
+Symptom Definition
+python
+Copy code
+SYMPTOMS = [
+    'maculopapular rash', 'chest_pain_severity', 'photophobia', 'pain sex',
+    'yellow skin', 'stomach pain', 'distention_of_abdomen_severity', 'insomnia',
+    'chills_severity', 'inability move feel one side body', 'visual_disturbances',
+    'receiving_blood_transfusion_severity', 'excessive daytime sleepiness',
+    'problem mood', 'webbed neck'
+]
+A predefined list of symptoms that the model uses for predicting diseases. Some symptoms have severity ratings indicated by _severity.
+Data Loading Function
+python
+Copy code
+def load_data(file_path):
+    return pd.read_csv(file_path)
+Loads a CSV dataset containing symptoms and disease labels.
+Data Preprocessing
+python
+Copy code
+def preprocess_data(data):
+    X = data[SYMPTOMS]
+    y = data['Disease']
+
+    label_encoder = LabelEncoder()
+    y_encoded = label_encoder.fit_transform(y)
+    y_one_hot = keras.utils.to_categorical(y_encoded)
+
+    return X, y_one_hot, label_encoder
+Splits the dataset into features (X) and target labels (y), encoding disease labels into one-hot format for multi-class classification.
+Model Building
+python
+Copy code
+def build_model(input_dim, output_dim):
+    model = keras.Sequential([
+        keras.layers.Dense(64, input_dim=input_dim, activation='relu'),
+        keras.layers.Dropout(0.2),
+        keras.layers.Dense(32, activation='relu'),
+        keras.layers.Dropout(0.2),
+        keras.layers.Dense(output_dim, activation='softmax')
+    ])
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    return model
+Constructs a feedforward neural network with two hidden layers, dropout for regularization, and a softmax output layer for multi-class classification.
+Model Training
+python
+Copy code
+def train_model(X, y, epochs=50, batch_size=32):
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    model = build_model(X.shape[1], y.shape[1])
+    early_stopping = keras.callbacks.EarlyStopping(patience=5, restore_best_weights=True)
+
+    history = model.fit(
+        X_train, y_train,
+        epochs=epochs,
+        batch_size=batch_size,
+        validation_data=(X_val, y_val),
+        callbacks=[early_stopping],
+        verbose=1
+    )
+
+    _, accuracy = model.evaluate(X_val, y_val, verbose=0)
+    print(f"Validation accuracy: {accuracy:.2f}")
+
+    return model, history
+Splits the data into training and validation sets, trains the model with early stopping to avoid overfitting, and evaluates accuracy on the validation set.
+Disease Prediction
+python
+Copy code
+def predict_disease(model, symptoms_input, label_encoder):
+    symptoms_array = np.array(symptoms_input).reshape(1, -1)
+    prediction = model.predict(symptoms_array)
+    disease_idx = np.argmax(prediction)
+    return label_encoder.inverse_transform([disease_idx])[0]
+Takes user input for symptoms, reshapes it for model input, and predicts the disease based on the trained model.
+Severity Calculation
+python
+Copy code
+def calculate_severity(symptoms_input, symptom_weights):
+    severity_score = np.dot(symptoms_input, list(symptom_weights.values()))
+    max_possible_score = sum(symptom_weights.values()) * 5  # Assuming max severity of 5 for each symptom
+    severity_percentage = (severity_score / max_possible_score) * 100
+
+    if severity_percentage <= 33:
+        return "Mild"
+    elif severity_percentage <= 66:
+        return "Moderate"
+    else:
+        return "Severe"
+Calculates the severity of symptoms based on predefined weights, determining the overall health status of the user.
+User Input
+python
+Copy code
+def get_user_input():
+    symptoms_input = []
+    print("\nPlease provide your symptoms based on the following questions:")
+
+    for symptom in SYMPTOMS:
+        while True:
+            if symptom.endswith('_severity'):
+                response = input(f"On a scale of 0-5, how severe is your {symptom.replace('_', ' ')}? ")
+                if response.isdigit() and 0 <= int(response) <= 5:
+                    symptoms_input.append(int(response))
+                    break
+                else:
+                    print("Invalid input. Please enter a number between 0 and 5.")
+            else:
+                response = input(f"Do you have {symptom.replace('_', ' ')}? (1 for Yes, 0 for No): ")
+                if response in ['0', '1']:
+                    symptoms_input.append(int(response))
+                    break
+                else:
+                    print("Invalid input. Please enter 0 for No or 1 for Yes.")
+
+    return symptoms_input
+Collects user input for symptoms, ensuring valid responses for both yes/no answers and severity ratings.
+Feature Importance Analysis
+python
+Copy code
+def analyze_feature_importance(model, symptom_names):
+    feature_importance = model.layers[0].get_weights()[0]
+    importance_scores = np.sum(np.abs(feature_importance), axis=1)
+    importance_df = pd.DataFrame({'Symptom': symptom_names, 'Importance': importance_scores})
+    importance_df = importance_df.sort_values('Importance', ascending=False)
+
+    plt.figure(figsize=(10, 6))
+    plt.bar(importance_df['Symptom'], importance_df['Importance'])
+    plt.xticks(rotation=90)
+    plt.xlabel('Symptoms')
+    plt.ylabel('Importance Score')
+    plt.title('Symptom Importance in Disease Prediction')
+    plt.tight_layout()
+    plt.show()
+Analyzes and visualizes the importance of each symptom in predicting diseases based on the weights of the first layer of the neural network.
+Plotting Training History
+python
+Copy code
+def plot_training_history(history):
+    plt.figure(figsize=(12, 4))
+
+    plt.subplot(1, 2, 1)
+    plt.plot(history.history['accuracy'], label='Training Accuracy')
+    plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+    plt.title('Model Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy')
+    plt.legend()
+
+    plt.subplot(1, 2, 2)
+    plt.plot(history.history['loss'], label='Training Loss')
+    plt.plot(history.history['val_loss'], label='Validation Loss')
+    plt.title('Model Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+
+    plt.tight_layout()
+    plt.show()
+Visualizes the training and validation accuracy and loss over epochs, helping to assess model performance.
+Main Function
+python
+Copy code
+def main():
+    print("Welcome to the Disease Prediction and Severity Analysis System")
+
+    try:
+        # Load and preprocess data
+        file_path = '/content/reduced_symptoms_dataset.csv'  # Update this path if your file is located elsewhere
+        data = load_data(file_path)
+        X, y, label_encoder = preprocess_data(data)
+
+        # Train model
+        model, history = train_model(X, y)
+
+        # Plot training history
+        plot_training_history(history)
+
+        # Analyze feature importance
+        analyze_feature_importance(model, SYMPTOMS)
+
+        # Define symptom weights (adjust based on medical knowledge)
+        symptom_weights = {symptom: 1.0 for symptom in SYMPTOMS}
+
+        while True:
+            symptoms_input = get_user_input()
+
+            predicted_disease = predict_disease(model, symptoms_input, label_encoder)
+            severity = calculate_severity(symptoms_input, symptom_weights)
+
+            print(f"\nBased on the symptoms provided:")
+            print(f"Predicted Disease: {predicted_disease}")
+            print(f"Severity Level: {severity}")
+            print("\nPlease consult with a healthcare professional for accurate diagnosis and treatment.")
+
+            if input("\nWould you like to enter symptoms for another prediction? (yes/no): ").lower() != 'yes':
+                break
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+if __name__ == "__main__":
+    main()
+This is the entry point of the program that loads the data, preprocesses it, trains the model, and allows the user to input symptoms for prediction. It also handles exceptions and prompts the user for further input.
+Usage
+
+Clone this repository.
+Ensure you have the required libraries installed (e.g., TensorFlow, Keras, Pandas).
+Place your symptom dataset (CSV) in the specified directory.
+Run the script:
+bash
+Copy code
+python disease_prediction.py
+Follow the prompts to input your symptoms and receive disease predictions and severity analysis.
